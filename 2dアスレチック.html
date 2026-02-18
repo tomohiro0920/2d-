@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SUPER PLATFORMER</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent: #ffd700;
+      --danger: #ff3333;
+      --hud:    #000000cc;
+    }
+
+    body {
+      background: #1a1a2e;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Press Start 2P', monospace;
+      user-select: none;
+      overflow: hidden;
+    }
+
+    /* Google Fonts フォールバック付き */
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+    /* ── タイトル画面 ── */
+    #titleScreen {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, #0f0c29, #302b63 50%, #24243e);
+      z-index: 100;
+      gap: 2rem;
+    }
+
+    #titleScreen h1 {
+      color: var(--accent);
+      font-size: clamp(1.2rem, 4vw, 2.5rem);
+      text-align: center;
+      text-shadow: 4px 4px 0 #b8860b, 0 0 30px #ffd70088;
+      animation: titlePulse 2s ease-in-out infinite;
+    }
+
+    @keyframes titlePulse {
+      0%, 100% { text-shadow: 4px 4px 0 #b8860b, 0 0 20px #ffd70066; }
+      50%       { text-shadow: 4px 4px 0 #b8860b, 0 0 50px #ffd700cc; }
+    }
+
+    .controls-hint {
+      color: #aaa;
+      font-size: 0.55rem;
+      line-height: 2.4;
+      text-align: center;
+    }
+
+    #startBtn {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      padding: 1rem 2.5rem;
+      font-family: inherit;
+      font-size: 0.75rem;
+      cursor: pointer;
+      clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+      animation: blink 1.2s step-end infinite;
+      transition: transform 0.1s, filter 0.1s;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    #startBtn:hover  { transform: scale(1.05); filter: brightness(1.2); animation: none; }
+    #startBtn:active { transform: scale(0.97); }
+
+    /* ── ゲームラッパー ── */
+    #gameWrapper { position: relative; display: none; }
+
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+      box-shadow: 0 0 40px #000a;
+      border: 3px solid #333;
+    }
+
+    /* ── HUD ── */
+    #hud {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 16px;
+      background: var(--hud);
+      color: #fff;
+      font-size: 0.55rem;
+      pointer-events: none;
+    }
+
+    #hud span { color: var(--accent); }
+
+    /* ── オーバーレイ共通 ── */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
+      background: #000000bb;
+      color: #fff;
+    }
+
+    .overlay.active { display: flex; }
+
+    .overlay h2 {
+      font-size: clamp(1rem, 3vw, 1.8rem);
+      text-shadow: 3px 3px 0 #555;
+    }
+
+    .overlay h2.success { color: var(--accent); }
+    .overlay h2.fail    { color: var(--danger); }
+
+    .overlay button {
+      background: transparent;
+      border: 2px solid var(--accent);
+      color: var(--accent);
+      font-family: inherit;
+      font-size: 0.6rem;
+      padding: 0.8rem 1.8rem;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .overlay button:hover { background: var(--accent); color: #000; }
+
+    /* ── モバイルボタン ── */
+    #mobileControls {
+      display: none;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    @media (max-width: 768px), (pointer: coarse) {
+      #mobileControls { display: flex; }
+    }
+
+    .mBtn {
+      background: #ffffff22;
+      border: 2px solid #ffffff44;
+      color: #fff;
+      font-family: inherit;
+      font-size: 1.2rem;
+      width: 64px; height: 64px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .mBtn:active { background: #ffffff44; }
+  </style>
+</head>
+<body>
+
+<!-- タイトル画面 -->
+<div id="titleScreen">
+  <h1>SUPER<br>PLATFORMER</h1>
+  <div class="controls-hint">
+    [W] / [SPACE] ── ジャンプ<br>
+    [A] 左移動 &nbsp; [D] 右移動<br><br>
+    全5ステージをクリアせよ！
+  </div>
+  <button id="startBtn">▶ START GAME</button>
+</div>
+
+<!-- ゲーム本体 -->
+<div id="gameWrapper">
+  <div id="hud">
+    <div>STAGE <span id="hudStage">1</span> / 5</div>
+    <div>SCORE <span id="hudScore">0</span></div>
+    <div>❤️ <span id="hudLives">3</span></div>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <div class="overlay" id="stageClear">
+    <h2 class="success">✨ STAGE CLEAR! ✨</h2>
+    <p id="stageClearMsg" style="font-size:0.55rem;color:#aaa"></p>
+    <button id="nextStageBtn">NEXT STAGE ▶</button>
+  </div>
+
+  <div class="overlay" id="gameOver">
+    <h2 class="fail">💀 GAME OVER 💀</h2>
+    <button id="retryBtn">RETRY</button>
+    <button id="retryTitleBtn">TITLE</button>
+  </div>
+
+  <div class="overlay" id="gameClear">
+    <h2 class="success">🏆 CONGRATULATIONS! 🏆</h2>
+    <p style="font-size:0.55rem;color:#aaa">全ステージクリア！</p>
+    <p id="finalScore" style="font-size:0.6rem;color:var(--accent)"></p>
+    <button id="clearTitleBtn">TITLE へ戻る</button>
+  </div>
+</div>
+
+<!-- モバイル操作 -->
+<div id="mobileControls">
+  <button class="mBtn" id="btnLeft">◀</button>
+  <button class="mBtn" id="btnJump">▲</button>
+  <button class="mBtn" id="btnRight">▶</button>
+</div>
+
+<script>
+// ── キャンバス初期化 ──────────────────────────────────────────
+const canvas = document.getElementById('gameCanvas');
+const ctx    = canvas.getContext('2d');
+const W = 800, H = 450;
+canvas.width = W; canvas.height = H;
+
+// ── 定数 ─────────────────────────────────────────────────────
+const GRAVITY    = 0.55;
+const JUMP_POWER = -13;
+const MOVE_SPD   = 4.5;
+
+// ── ゲーム状態 ────────────────────────────────────────────────
+let state = { stage: 1, score: 0, lives: 3, running: false };
+
+// ── 入力管理 ─────────────────────────────────────────────────
+const keys        = {};
+const mobileState = { left: false, right: false, jump: false };
+
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (['Space','ArrowUp','ArrowDown'].includes(e.code)) e.preventDefault();
+});
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+function bindMobile(id, prop) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  btn.addEventListener('pointerdown', () => { mobileState[prop] = true; });
+  btn.addEventListener('pointerup',   () => { mobileState[prop] = false; });
+  btn.addEventListener('pointerleave',() => { mobileState[prop] = false; });
+}
+
+const isLeft  = () => keys['KeyA'] || keys['ArrowLeft']  || mobileState.left;
+const isRight = () => keys['KeyD'] || keys['ArrowRight'] || mobileState.right;
+const isJump  = () => keys['KeyW'] || keys['Space'] || keys['ArrowUp'] || mobileState.jump;
+
+// ── ステージデータ ────────────────────────────────────────────
+function buildStages() {
+  return [
+    // ステージ1：易しい
+    {
+      worldW: 3200, bgColor: ['#5c94fc','#92c3ff'],
+      playerStart: { x: 80, y: 300 },
+      grounds: [
+        { x: 0,    y: 380, w: 800  },
+        { x: 850,  y: 380, w: 600  },
+        { x: 1500, y: 380, w: 700  },
+        { x: 2250, y: 380, w: 950  },
+      ],
+      platforms: [
+        { x: 300, y: 300, w: 128 }, { x: 550, y: 240, w: 96  },
+        { x: 900, y: 310, w: 128 }, { x: 1200,y: 270, w: 96  },
+        { x: 1600,y: 300, w: 128 }, { x: 1900,y: 240, w: 96  },
+      ],
+      enemies: [
+        { x: 400,  dir: 1  }, { x: 900,  dir: -1 },
+        { x: 1600, dir: 1  }, { x: 2100, dir: -1 },
+      ],
+      goalX: 3050,
+    },
+    // ステージ2：穴増える
+    {
+      worldW: 3600, bgColor: ['#6a5acd','#9370db'],
+      playerStart: { x: 80, y: 300 },
+      grounds: [
+        { x: 0,    y: 380, w: 700 }, { x: 800,  y: 380, w: 500 },
+        { x: 1500, y: 380, w: 400 }, { x: 2100, y: 380, w: 500 },
+        { x: 2800, y: 380, w: 800 },
+      ],
+      platforms: [
+        { x: 250,  y: 290, w: 128 }, { x: 450,  y: 220, w: 96  },
+        { x: 850,  y: 300, w: 96  }, { x: 1050, y: 240, w: 128 },
+        { x: 1550, y: 310, w: 96  }, { x: 1750, y: 240, w: 96  },
+        { x: 2200, y: 300, w: 128 }, { x: 2500, y: 230, w: 96  },
+      ],
+      enemies: [
+        { x: 300,  dir: 1  }, { x: 600,  dir: -1 }, { x: 1000, dir: 1  },
+        { x: 1600, dir: -1 }, { x: 2200, dir: 1  }, { x: 2900, dir: -1 },
+      ],
+      goalX: 3450,
+    },
+    // ステージ3：高低差が大きい
+    {
+      worldW: 4000, bgColor: ['#1a1a3e','#2d1b69'],
+      playerStart: { x: 80, y: 280 },
+      grounds: [
+        { x: 0,    y: 380, w: 500 }, { x: 600,  y: 380, w: 300 },
+        { x: 1200, y: 380, w: 300 }, { x: 1700, y: 340, w: 300 },
+        { x: 2200, y: 300, w: 300 }, { x: 2700, y: 380, w: 300 },
+        { x: 3200, y: 380, w: 800 },
+      ],
+      platforms: [
+        { x: 200,  y: 280, w: 128 }, { x: 400,  y: 210, w: 96  },
+        { x: 650,  y: 300, w: 128 }, { x: 850,  y: 230, w: 96  },
+        { x: 1000, y: 170, w: 96  }, { x: 1250, y: 310, w: 128 },
+        { x: 1500, y: 240, w: 96  }, { x: 1750, y: 270, w: 96  },
+        { x: 2050, y: 240, w: 128 }, { x: 2300, y: 220, w: 96  },
+        { x: 2600, y: 300, w: 96  }, { x: 2900, y: 240, w: 128 },
+      ],
+      enemies: [
+        { x: 300,  dir: 1  }, { x: 700,  dir: -1 }, { x: 1050, dir: 1  },
+        { x: 1300, dir: -1 }, { x: 1800, dir: 1  }, { x: 2300, dir: -1 },
+        { x: 2900, dir: 1  }, { x: 3300, dir: -1 },
+      ],
+      goalX: 3850,
+    },
+    // ステージ4：敵が多い
+    {
+      worldW: 4200, bgColor: ['#2d4a00','#3d6b00'],
+      playerStart: { x: 80, y: 300 },
+      grounds: [
+        { x: 0,    y: 380, w: 600 }, { x: 700,  y: 380, w: 400 },
+        { x: 1300, y: 380, w: 500 }, { x: 2000, y: 380, w: 400 },
+        { x: 2600, y: 380, w: 600 }, { x: 3400, y: 380, w: 800 },
+      ],
+      platforms: [
+        { x: 200,  y: 290, w: 96  }, { x: 380,  y: 220, w: 128 },
+        { x: 750,  y: 300, w: 96  }, { x: 950,  y: 240, w: 128 },
+        { x: 1350, y: 290, w: 96  }, { x: 1550, y: 210, w: 96  },
+        { x: 1750, y: 270, w: 128 }, { x: 2050, y: 300, w: 96  },
+        { x: 2250, y: 230, w: 96  }, { x: 2650, y: 280, w: 128 },
+        { x: 2900, y: 210, w: 96  }, { x: 3100, y: 260, w: 96  },
+      ],
+      enemies: [
+        { x: 250,  dir: 1  }, { x: 450,  dir: -1 }, { x: 750,  dir: 1  },
+        { x: 1000, dir: -1 }, { x: 1400, dir: 1  }, { x: 1650, dir: -1 },
+        { x: 2050, dir: 1  }, { x: 2300, dir: -1 }, { x: 2700, dir: 1  },
+        { x: 2950, dir: -1 }, { x: 3200, dir: 1  }, { x: 3500, dir: -1 },
+      ],
+      goalX: 4050,
+    },
+    // ステージ5：最終・高難度
+    {
+      worldW: 5000, bgColor: ['#3d0000','#6b1010'],
+      playerStart: { x: 80, y: 280 },
+      grounds: [
+        { x: 0,    y: 380, w: 400 }, { x: 500,  y: 380, w: 250 },
+        { x: 900,  y: 350, w: 200 }, { x: 1250, y: 320, w: 200 },
+        { x: 1600, y: 380, w: 300 }, { x: 2050, y: 380, w: 250 },
+        { x: 2450, y: 380, w: 300 }, { x: 2900, y: 380, w: 250 },
+        { x: 3300, y: 380, w: 300 }, { x: 3750, y: 380, w: 250 },
+        { x: 4150, y: 380, w: 850 },
+      ],
+      platforms: [
+        { x: 150,  y: 270, w: 96  }, { x: 320,  y: 200, w: 96  },
+        { x: 550,  y: 310, w: 96  }, { x: 720,  y: 240, w: 128 },
+        { x: 950,  y: 280, w: 96  }, { x: 1100, y: 210, w: 96  },
+        { x: 1300, y: 250, w: 96  }, { x: 1480, y: 180, w: 96  },
+        { x: 1650, y: 290, w: 96  }, { x: 1850, y: 220, w: 128 },
+        { x: 2100, y: 280, w: 96  }, { x: 2300, y: 210, w: 96  },
+        { x: 2500, y: 260, w: 128 }, { x: 2750, y: 190, w: 96  },
+        { x: 2950, y: 270, w: 96  }, { x: 3150, y: 210, w: 96  },
+        { x: 3400, y: 280, w: 128 }, { x: 3650, y: 220, w: 96  },
+        { x: 3850, y: 270, w: 96  }, { x: 4050, y: 210, w: 96  },
+      ],
+      enemies: [
+        { x: 200,  dir: 1  }, { x: 380,  dir: -1 }, { x: 550,  dir: 1  },
+        { x: 750,  dir: -1 }, { x: 950,  dir: 1  }, { x: 1150, dir: -1 },
+        { x: 1350, dir: 1  }, { x: 1550, dir: -1 }, { x: 1800, dir: 1  },
+        { x: 2050, dir: -1 }, { x: 2250, dir: 1  }, { x: 2500, dir: -1 },
+        { x: 2750, dir: 1  }, { x: 3000, dir: -1 }, { x: 3300, dir: 1  },
+        { x: 3550, dir: -1 }, { x: 3800, dir: 1  }, { x: 4100, dir: -1 },
+      ],
+      goalX: 4850,
+    },
+  ];
+}
+
+// ── エンティティ基底クラス ────────────────────────────────────
+class Entity {
+  constructor(x, y, w, h) {
+    this.x = x; this.y = y; this.w = w; this.h = h;
+    this.vx = 0; this.vy = 0;
+    this.onGround = false;
+    this.alive = true;
+  }
+
+  collidesWith(other) {
+    return this.x < other.x + other.w && this.x + this.w > other.x &&
+           this.y < other.y + other.h && this.y + this.h > other.y;
+  }
+}
+
+// ── プレイヤー ────────────────────────────────────────────────
+class Player extends Entity {
+  constructor(x, y) {
+    super(x, y, 28, 36);
+    this.jumpPressed = false;
+    this.invincible  = 0;
+    this.animFrame   = 0;
+    this.animTimer   = 0;
+    this.facing      = 1;
+  }
+
+  update(platforms, enemies, goal, worldW) {
+    // 移動入力
+    if (isLeft())       { this.vx = -MOVE_SPD; this.facing = -1; }
+    else if (isRight()) { this.vx =  MOVE_SPD; this.facing =  1; }
+    else                  this.vx = 0;
+
+    // ジャンプ（接地時のみ）
+    const jumpNow = isJump();
+    if (jumpNow && !this.jumpPressed && this.onGround) this.vy = JUMP_POWER;
+    this.jumpPressed = jumpNow;
+
+    // 物理適用
+    this.vy += GRAVITY;
+    this.x  += this.vx;
+    this.y  += this.vy;
+
+    // 横壁クランプ
+    this.x = Math.max(0, Math.min(this.x, worldW - this.w));
+
+    // 地形衝突解決
+    this.onGround = false;
+    for (const p of platforms) this._resolve(p);
+
+    // 落下死
+    if (this.y > H + 100) return 'fall';
+
+    // 無敵タイマー
+    if (this.invincible > 0) this.invincible--;
+
+    // 敵との衝突
+    if (this.invincible === 0) {
+      for (const e of enemies) {
+        if (!e.alive || !this.collidesWith(e)) continue;
+        if (this.vy > 0 && this.y + this.h <= e.y + e.h * 0.55) {
+          // 踏み潰し
+          e.alive = false;
+          this.vy = -9;
+          state.score += 100;
+        } else {
+          return 'hit';
+        }
+      }
+    }
+
+    // ゴール判定
+    if (this.collidesWith({ x: goal.x, y: goal.y, w: 32, h: 80 })) return 'goal';
+
+    // 歩きアニメ
+    if (this.vx !== 0) {
+      if (++this.animTimer >= 8) { this.animFrame ^= 1; this.animTimer = 0; }
+    } else { this.animFrame = 0; }
+
+    return null;
+  }
+
+  _resolve(p) {
+    if (!this.collidesWith(p)) return;
+    const ox = Math.min(this.x + this.w, p.x + p.w) - Math.max(this.x, p.x);
+    const oy = Math.min(this.y + this.h, p.y + p.h) - Math.max(this.y, p.y);
+    if (ox < oy) {
+      this.x += this.x < p.x ? -ox : ox;
+      this.vx = 0;
+    } else {
+      if (this.y < p.y) { this.y = p.y - this.h; this.vy = 0; this.onGround = true; }
+      else               { this.y = p.y + p.h;   this.vy = 0; }
+    }
+  }
+
+  draw(cx, camX) {
+    if (this.invincible > 0 && Math.floor(this.invincible / 4) % 2) return;
+    const sx = this.x - camX, sy = this.y;
+    cx.save();
+    cx.translate(sx + this.w / 2, sy + this.h / 2);
+    if (this.facing === -1) cx.scale(-1, 1);
+
+    // ボディ
+    cx.fillStyle = '#e03020';
+    cx.fillRect(-12, -10, 24, 20);
+    // 脚（アニメ）
+    cx.fillStyle = '#4040c0';
+    if (this.animFrame === 0) {
+      cx.fillRect(-10, 10, 9, 10); cx.fillRect(1, 10, 9, 10);
+    } else {
+      cx.fillRect(-10, 8, 9, 12);  cx.fillRect(1, 12, 9, 8);
+    }
+    // 顔
+    cx.fillStyle = '#f0c090'; cx.fillRect(-8, -14, 16, 14);
+    // 帽子
+    cx.fillStyle = '#e03020';
+    cx.fillRect(-10, -22, 20, 8); cx.fillRect(-6, -28, 14, 8);
+    // 目
+    cx.fillStyle = '#000'; cx.fillRect(2, -12, 4, 4);
+    cx.restore();
+  }
+}
+
+// ── 敵 ───────────────────────────────────────────────────────
+class Enemy extends Entity {
+  constructor(x, y, dir) {
+    super(x, y, 28, 28);
+    this.vx        = dir * 1.8;
+    this.walkTimer = 0;
+    this.walkFrame = 0;
+    this.deadTimer = 0;
+  }
+
+  update(platforms) {
+    if (!this.alive) { this.deadTimer++; return; }
+
+    this.vy += GRAVITY;
+    this.x  += this.vx;
+    this.y  += this.vy;
+
+    let onG = false;
+    for (const p of platforms) {
+      if (!this.collidesWith(p)) continue;
+      const ox = Math.min(this.x + this.w, p.x + p.w) - Math.max(this.x, p.x);
+      const oy = Math.min(this.y + this.h, p.y + p.h) - Math.max(this.y, p.y);
+      if (ox < oy) {
+        this.vx *= -1;
+        this.x  += this.x < p.x ? -ox : ox;
+      } else if (this.y < p.y) {
+        this.y = p.y - this.h; this.vy = 0; onG = true;
+      }
+    }
+
+    // 崖でUターン
+    if (onG) {
+      let edgeL = false, edgeR = false;
+      for (const p of platforms) {
+        const py2 = p.y + p.h;
+        if (this.y + this.h >= p.y && this.y + this.h <= py2) {
+          if (this.x - 4 >= p.x && this.x - 4 <= p.x + p.w)         edgeL = true;
+          if (this.x + this.w + 4 >= p.x && this.x + this.w + 4 <= p.x + p.w) edgeR = true;
+        }
+      }
+      if (!edgeL && this.vx < 0) this.vx *= -1;
+      if (!edgeR && this.vx > 0) this.vx *= -1;
+    }
+
+    if (++this.walkTimer >= 10) { this.walkFrame ^= 1; this.walkTimer = 0; }
+  }
+
+  draw(cx, camX) {
+    if (!this.alive && this.deadTimer > 20) return;
+    const sx = this.x - camX, sy = this.y;
+    if (!this.alive) {
+      cx.fillStyle = '#808000'; cx.fillRect(sx, sy + this.h - 8, this.w, 8); return;
+    }
+    cx.save();
+    cx.translate(sx + this.w / 2, sy + this.h / 2);
+    // 傘（キノコ風）
+    cx.fillStyle = '#c0392b';
+    cx.beginPath(); cx.arc(0, -4, 12, Math.PI, 0); cx.fill();
+    cx.fillRect(-12, -4, 24, 12);
+    // 水玉
+    cx.fillStyle = '#ffffff88';
+    cx.beginPath(); cx.arc(-5, -8, 3, 0, Math.PI * 2); cx.fill();
+    cx.beginPath(); cx.arc( 5, -8, 3, 0, Math.PI * 2); cx.fill();
+    // 顔
+    cx.fillStyle = '#f0c090'; cx.fillRect(-10, -4, 20, 14);
+    // 目（歩きアニメ）
+    const ey = this.walkFrame ? -1 : 0;
+    cx.fillStyle = '#000';
+    cx.fillRect(-6, ey, 4, 4); cx.fillRect(2, ey, 4, 4);
+    cx.restore();
+  }
+}
+
+// ── パーティクル ──────────────────────────────────────────────
+let particles = [];
+
+function spawnParticles(x, y) {
+  for (let i = 0; i < 8; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 6,
+      vy: -Math.random() * 5 - 2,
+      life: 30,
+      color: `hsl(${Math.random() * 60 + 30},100%,60%)`,
+    });
+  }
+}
+
+function updateParticles() {
+  for (const p of particles) { p.x += p.vx; p.y += p.vy; p.vy += 0.3; p.life--; }
+  particles = particles.filter(p => p.life > 0);
+}
+
+function drawParticles(camX) {
+  for (const p of particles) {
+    ctx.save();
+    ctx.globalAlpha = p.life / 30;
+    ctx.fillStyle   = p.color;
+    ctx.fillRect(p.x - camX - 3, p.y - 3, 6, 6);
+    ctx.restore();
+  }
+}
+
+// ── ゲームオブジェクト ────────────────────────────────────────
+let player, allPlatforms, enemies, goal, camX, currentStageData, animId;
+
+// ── ステージ読み込み ──────────────────────────────────────────
+function loadStage(index) {
+  const stages = buildStages();
+  if (index >= stages.length) { showGameClear(); return; }
+
+  currentStageData = stages[index];
+  particles        = [];
+
+  allPlatforms = [
+    ...currentStageData.grounds.map(g => ({
+      x: g.x, y: g.y, w: g.w, h: H - g.y, isGround: true,
+    })),
+    ...currentStageData.platforms.map(p => ({
+      x: p.x, y: p.y, w: p.w, h: 16, isGround: false,
+    })),
+  ];
+
+  // 敵の初期Y座標を地形に合わせて補正
+  enemies = currentStageData.enemies.map(e => {
+    let bestY = currentStageData.grounds[0]?.y ?? 380;
+    for (const p of allPlatforms) {
+      if (e.x >= p.x && e.x <= p.x + p.w && p.y > bestY - 100) {
+        bestY = Math.min(bestY, p.y);
+      }
+    }
+    return new Enemy(e.x, bestY - 28, e.dir);
+  });
+
+  // ゴール位置の地面を探す
+  const goalGround = currentStageData.grounds.find(g =>
+    currentStageData.goalX >= g.x && currentStageData.goalX <= g.x + g.w
+  );
+  goal = { x: currentStageData.goalX, y: (goalGround?.y ?? 300) - 80 };
+
+  player = new Player(currentStageData.playerStart.x, currentStageData.playerStart.y);
+  camX   = 0;
+  updateHUD();
+}
+
+// ── 描画 ─────────────────────────────────────────────────────
+function drawBackground() {
+  const [c1, c2] = currentStageData.bgColor;
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, c1); grad.addColorStop(1, c2);
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+
+  // 遠景パララックス山
+  ctx.fillStyle = '#00000022';
+  const ox = -(camX * 0.15) % W;
+  for (let i = -1; i < 3; i++) {
+    const bx = ox + i * W;
+    ctx.beginPath();
+    ctx.moveTo(bx, H);
+    ctx.lineTo(bx + 100, 250); ctx.lineTo(bx + 200, 300);
+    ctx.lineTo(bx + 350, 200); ctx.lineTo(bx + 500, 280);
+    ctx.lineTo(bx + 650, 220); ctx.lineTo(bx + W, H);
+    ctx.fill();
+  }
+
+  // 雲
+  ctx.fillStyle = '#ffffff18';
+  const cloud = (x, y, r) => {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.arc(x + r * 0.8, y - r * 0.3, r * 0.7, 0, Math.PI * 2);
+    ctx.arc(x + r * 1.5, y, r * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  const co = -(camX * 0.3) % 600;
+  for (let i = -1; i < 4; i++) {
+    cloud(co + i * 600 + 50, 80, 40); cloud(co + i * 600 + 300, 60, 30);
+  }
+}
+
+function drawPlatforms() {
+  for (const p of allPlatforms) {
+    const sx = p.x - camX;
+    if (sx + p.w < 0 || sx > W) continue;
+    if (p.isGround) {
+      ctx.fillStyle = '#5a3010'; ctx.fillRect(sx, p.y, p.w, H - p.y);
+      ctx.fillStyle = '#4a9020'; ctx.fillRect(sx, p.y, p.w, 12);
+      ctx.fillStyle = '#3a7010';
+      for (let i = 0; i < p.w; i += 32) ctx.fillRect(sx + i, p.y + 12, 16, 4);
+    } else {
+      ctx.fillStyle = '#c08020'; ctx.fillRect(sx, p.y, p.w, 16);
+      ctx.fillStyle = '#e0a030'; ctx.fillRect(sx, p.y, p.w, 6);
+      ctx.fillStyle = '#a06010'; ctx.fillRect(sx, p.y + 12, p.w, 4);
+      ctx.strokeStyle = '#80400888'; ctx.lineWidth = 1;
+      for (let i = 0; i < p.w; i += 16) ctx.strokeRect(sx + i, p.y, 16, 16);
+    }
+  }
+}
+
+function drawGoal() {
+  const sx = goal.x - camX;
+  if (sx < -50 || sx > W + 50) return;
+  ctx.fillStyle = '#888'; ctx.fillRect(sx + 14, goal.y, 4, 80);
+  ctx.fillStyle = '#ff4400';
+  ctx.beginPath(); ctx.moveTo(sx + 18, goal.y);
+  ctx.lineTo(sx + 42, goal.y + 12); ctx.lineTo(sx + 18, goal.y + 24); ctx.fill();
+  ctx.fillStyle = '#555'; ctx.fillRect(sx + 10, goal.y + 72, 12, 8);
+  ctx.fillStyle = '#ffd700'; ctx.font = 'bold 11px monospace';
+  ctx.textAlign = 'center'; ctx.fillText('GOAL', sx + 16, goal.y - 6);
+  ctx.textAlign = 'left';
+}
+
+// ── メインループ ──────────────────────────────────────────────
+function gameLoop() {
+  if (!state.running) return;
+
+  const result = player.update(allPlatforms, enemies, goal, currentStageData.worldW);
+
+  for (const e of enemies) {
+    const wasAlive = e.alive;
+    e.update(allPlatforms);
+    if (wasAlive && !e.alive) spawnParticles(e.x + e.w / 2, e.y);
+  }
+  updateParticles();
+
+  // カメラ追従
+  camX = Math.max(0, Math.min(player.x - W / 3, currentStageData.worldW - W));
+
+  // 前進スコア
+  state.score = Math.max(state.score, Math.floor(player.x / 10) * 10 + (state.stage - 1) * 5000);
+  updateHUD();
+
+  // 描画
+  drawBackground();
+  drawPlatforms();
+  drawGoal();
+  drawParticles(camX);
+  for (const e of enemies) e.draw(ctx, camX);
+  player.draw(ctx, camX);
+
+  // 結果処理
+  if (result === 'goal') {
+    state.running = false;
+    state.stage >= 5 ? showGameClear() : showStageClear();
+    return;
+  }
+  if (result === 'fall' || result === 'hit') {
+    state.lives--;
+    updateHUD();
+    if (state.lives <= 0) { state.running = false; showGameOver(); return; }
+    // ヒット：その場リスタート（無敵付き）/ 落下：ステージ先頭から
+    if (result === 'hit') {
+      player.x = currentStageData.playerStart.x;
+      player.y = currentStageData.playerStart.y;
+      player.vx = 0; player.vy = 0;
+    } else {
+      loadStage(state.stage - 1);
+    }
+    player.invincible = 120;
+  }
+
+  animId = requestAnimationFrame(gameLoop);
+}
+
+// ── HUD / オーバーレイ制御 ────────────────────────────────────
+function updateHUD() {
+  document.getElementById('hudStage').textContent = state.stage;
+  document.getElementById('hudScore').textContent = state.score.toLocaleString();
+  document.getElementById('hudLives').textContent = state.lives;
+}
+
+function showOverlay(id) {
+  ['stageClear','gameOver','gameClear'].forEach(n =>
+    document.getElementById(n).classList.remove('active')
+  );
+  if (id) document.getElementById(id).classList.add('active');
+}
+
+function showStageClear() {
+  document.getElementById('stageClearMsg').textContent =
+    `ステージ ${state.stage} クリア！  SCORE: ${state.score.toLocaleString()}`;
+  showOverlay('stageClear');
+}
+
+function showGameOver()  { showOverlay('gameOver'); }
+
+function showGameClear() {
+  document.getElementById('finalScore').textContent =
+    `FINAL SCORE: ${state.score.toLocaleString()}`;
+  showOverlay('gameClear');
+}
+
+// ── ボタンイベント（onclick属性不要・JS内でバインド）────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // モバイルボタン
+  bindMobile('btnLeft',  'left');
+  bindMobile('btnRight', 'right');
+  bindMobile('btnJump',  'jump');
+
+  // スタート
+  document.getElementById('startBtn').addEventListener('click', () => {
+    document.getElementById('titleScreen').style.display = 'none';
+    document.getElementById('gameWrapper').style.display = 'block';
+    state = { stage: 1, score: 0, lives: 3, running: true };
+    loadStage(0);
+    if (animId) cancelAnimationFrame(animId);
+    animId = requestAnimationFrame(gameLoop);
+  });
+
+  // ネクストステージ
+  document.getElementById('nextStageBtn').addEventListener('click', () => {
+    state.stage++;
+    showOverlay(null);
+    loadStage(state.stage - 1);
+    state.running = true;
+    if (animId) cancelAnimationFrame(animId);
+    animId = requestAnimationFrame(gameLoop);
+  });
+
+  // リトライ
+  document.getElementById('retryBtn').addEventListener('click', () => {
+    state = { stage: 1, score: 0, lives: 3, running: true };
+    showOverlay(null);
+    loadStage(0);
+    if (animId) cancelAnimationFrame(animId);
+    animId = requestAnimationFrame(gameLoop);
+  });
+
+  // タイトルへ（ゲームオーバー）
+  document.getElementById('retryTitleBtn').addEventListener('click', returnTitle);
+  // タイトルへ（ゲームクリア）
+  document.getElementById('clearTitleBtn').addEventListener('click', returnTitle);
+});
+
+function returnTitle() {
+  state.running = false;
+  if (animId) cancelAnimationFrame(animId);
+  showOverlay(null);
+  document.getElementById('gameWrapper').style.display  = 'none';
+  document.getElementById('titleScreen').style.display  = 'flex';
+}
+</script>
+</body>
+</html>
